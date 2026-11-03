@@ -1,1 +1,297 @@
+name: Build Bank Accounts APK
 
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Create Android project
+        run: |
+          mkdir -p app/src/main/java/com/adnan/bankaccounts
+          mkdir -p app/src/main/res/xml
+
+          cat > settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "BankAccounts"
+          include ':app'
+          EOF
+
+          cat > build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application' version '8.7.3' apply false
+          }
+          EOF
+
+          cat > app/build.gradle <<'EOF'
+          plugins {
+              id 'com.android.application'
+          }
+          android {
+              namespace 'com.adnan.bankaccounts'
+              compileSdk 35
+              defaultConfig {
+                  applicationId 'com.adnan.bankaccounts'
+                  minSdk 23
+                  targetSdk 35
+                  versionCode 1
+                  versionName '1.0'
+              }
+          }
+          dependencies {
+              implementation 'androidx.core:core:1.15.0'
+          }
+          EOF
+
+          cat > app/src/main/AndroidManifest.xml <<'EOF'
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <application
+                  android:theme="@android:style/Theme.Material.Light.NoActionBar"
+                  android:label="حساباتي البنكية"
+                  android:allowBackup="true"
+                  android:supportsRtl="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN"/>
+                          <category android:name="android.intent.category.LAUNCHER"/>
+                      </intent-filter>
+                  </activity>
+                  <provider
+                      android:name="androidx.core.content.FileProvider"
+                      android:authorities="com.adnan.bankaccounts.provider"
+                      android:exported="false"
+                      android:grantUriPermissions="true">
+                      <meta-data
+                          android:name="android.support.FILE_PROVIDER_PATHS"
+                          android:resource="@xml/paths"/>
+                  </provider>
+              </application>
+          </manifest>
+          EOF
+
+          cat > app/src/main/res/xml/paths.xml <<'EOF'
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <files-path name="images" path="bank_images/"/>
+          </paths>
+          EOF
+
+          cat > app/src/main/java/com/adnan/bankaccounts/MainActivity.java <<'EOF'
+          package com.adnan.bankaccounts;
+
+          import android.app.*;
+          import android.os.*;
+          import android.content.*;
+          import android.net.Uri;
+          import android.graphics.*;
+          import android.view.*;
+          import android.widget.*;
+          import androidx.core.content.FileProvider;
+          import java.io.*;
+          import java.util.*;
+
+          public class MainActivity extends Activity {
+              LinearLayout root, content;
+              String selected = "alahli";
+              String[] names = {
+                  "البنك الأهلي السعودي",
+                  "مصرف الراجحي",
+                  "بنك الرياض",
+                  "مصرف الإنماء",
+                  "البنك العربي الوطني",
+                  "بنك البلاد",
+                  "البنك السعودي الفرنسي",
+                  "بنك الجزيرة",
+                  "البنك السعودي للاستثمار",
+                  "بنك SAB"
+              };
+              String[] keys = {
+                  "alahli","rajhi","riyad","alinma","anb",
+                  "bilad","bsf","jazira","saib","sab"
+              };
+
+              public void onCreate(Bundle b) {
+                  super.onCreate(b);
+                  getWindow().setStatusBarColor(Color.rgb(15,35,55));
+                  getWindow().setNavigationBarColor(Color.rgb(15,35,55));
+                  showHome();
+              }
+
+              TextView text(String s, int size) {
+                  TextView t = new TextView(this);
+                  t.setText(s);
+                  t.setTextSize(size);
+                  t.setTextColor(Color.rgb(25,40,55));
+                  t.setPadding(12,14,12,14);
+                  return t;
+              }
+
+              Button button(String s) {
+                  Button b = new Button(this);
+                  b.setText(s);
+                  b.setTextSize(14);
+                  return b;
+              }
+
+              void base(String title) {
+                  root = new LinearLayout(this);
+                  root.setOrientation(1);
+                  root.setPadding(16,16,16,16);
+                  root.setBackgroundColor(Color.rgb(245,247,250));
+                  root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
+                  setContentView(root);
+                  TextView heading = text(title,24);
+                  heading.setTextColor(Color.rgb(15,55,85));
+                  heading.setGravity(Gravity.CENTER);
+                  root.addView(heading);
+                  ScrollView scroll = new ScrollView(this);
+                  content = new LinearLayout(this);
+                  content.setOrientation(1);
+                  scroll.addView(content);
+                  root.addView(scroll);
+              }
+
+              void showHome() {
+                  base("حساباتي البنكية");
+                  content.addView(text("اختر البنك",18));
+                  for (int i=0;i<names.length;i++) {
+                      final String key=keys[i], name=names[i];
+                      Button b=button("🏦   "+name);
+                      content.addView(b);
+                      b.setOnClickListener(v->{selected=key;showBank(name);});
+                  }
+              }
+
+              File folder() {
+                  File f=new File(getFilesDir(),"bank_images/"+selected);
+                  if(!f.exists()) f.mkdirs();
+                  return f;
+              }
+
+              void showBank(String name) {
+                  base(name);
+                  Button add=button("＋ إضافة صورة حساب من المعرض");
+                  content.addView(add);
+                  add.setOnClickListener(v->{
+                      Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                      i.setType("image/*");
+                      i.addCategory(Intent.CATEGORY_OPENABLE);
+                      startActivityForResult(i,10);
+                  });
+                  content.addView(text("الصور المحفوظة",18));
+                  File[] files=folder().listFiles();
+                  if(files==null || files.length==0) {
+                      content.addView(text("لا توجد صور لهذا البنك حتى الآن",15));
+                  } else {
+                      Arrays.sort(files,Collections.reverseOrder());
+                      for(File f:files) {
+                          LinearLayout item=new LinearLayout(this);
+                          item.setOrientation(1);
+                          ImageView img=new ImageView(this);
+                          img.setImageBitmap(BitmapFactory.decodeFile(f.getAbsolutePath()));
+                          img.setAdjustViewBounds(true);
+                          img.setMaxHeight(260);
+                          item.addView(img);
+                          LinearLayout actions=new LinearLayout(this);
+                          Button share=button("مشاركة");
+                          Button delete=button("حذف");
+                          actions.addView(share,new LinearLayout.LayoutParams(0,-2,1));
+                          actions.addView(delete,new LinearLayout.LayoutParams(0,-2,1));
+                          item.addView(actions);
+                          content.addView(item);
+                          share.setOnClickListener(v->shareFile(f));
+                          delete.setOnClickListener(v->{
+                              new AlertDialog.Builder(this)
+                                  .setMessage("هل تريد حذف الصورة؟")
+                                  .setPositiveButton("حذف",(d,w)->{
+                                      f.delete();showBank(name);
+                                  })
+                                  .setNegativeButton("إلغاء",null).show();
+                          });
+                      }
+                  }
+                  Button back=button("العودة للبنوك");
+                  content.addView(back);
+                  back.setOnClickListener(v->showHome());
+              }
+
+              protected void onActivityResult(int requestCode,int resultCode,Intent data) {
+                  super.onActivityResult(requestCode,resultCode,data);
+                  if(requestCode==10 && resultCode==RESULT_OK && data!=null) {
+                      Uri uri=data.getData();
+                      try {
+                          InputStream in=getContentResolver().openInputStream(uri);
+                          File out=new File(folder(),"account_"+System.currentTimeMillis()+".jpg");
+                          FileOutputStream fos=new FileOutputStream(out);
+                          byte[] buf=new byte[8192];
+                          int n;
+                          while((n=in.read(buf))>0) fos.write(buf,0,n);
+                          in.close();fos.close();
+                          showBank(selectedName());
+                          Toast.makeText(this,"تم حفظ الصورة",Toast.LENGTH_SHORT).show();
+                      } catch(Exception e) {
+                          Toast.makeText(this,"تعذر حفظ الصورة",Toast.LENGTH_LONG).show();
+                      }
+                  }
+              }
+
+              String selectedName() {
+                  for(int i=0;i<keys.length;i++)
+                      if(keys[i].equals(selected)) return names[i];
+                  return "البنك";
+              }
+
+              void shareFile(File f) {
+                  try {
+                      Uri uri=FileProvider.getUriForFile(
+                          this,"com.adnan.bankaccounts.provider",f);
+                      Intent i=new Intent(Intent.ACTION_SEND);
+                      i.setType("image/*");
+                      i.putExtra(Intent.EXTRA_STREAM,uri);
+                      i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                      startActivity(Intent.createChooser(i,"مشاركة صورة الحساب"));
+                  } catch(Exception e) {
+                      Toast.makeText(this,"تعذرت مشاركة الصورة",Toast.LENGTH_SHORT).show();
+                  }
+              }
+          }
+          EOF
+
+      - name: Build APK
+        run: gradle assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Bank-Accounts-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
